@@ -1,0 +1,115 @@
+{
+  "enabled": {
+    "description": "启用虚拟日常",
+    "type": "bool",
+    "hint": "关闭后不会启动定时循环，但命令仍可用于查看状态",
+    "default": true
+  },
+  "interval_minutes": {
+    "description": "经历生成间隔（分钟）",
+    "type": "int",
+    "hint": "每隔一段时间生成一次模拟经历，并交给 LLM 决定是否主动发言",
+    "slider": {
+      "min": 1,
+      "max": 1440,
+      "step": 1
+    },
+    "default": 60
+  },
+  "interval_jitter_seconds": {
+    "description": "间隔随机抖动（秒）",
+    "type": "int",
+    "hint": "在基础间隔前后随机浮动，避免固定节奏",
+    "slider": {
+      "min": 0,
+      "max": 3600,
+      "step": 1
+    },
+    "default": 600
+  },
+  "max_delay_seconds": {
+    "description": "LLM 可选择的最大发送延迟（秒）",
+    "type": "int",
+    "hint": "LLM 决定发送时，可以安排在这段时间内延迟发送",
+    "slider": {
+      "min": 0,
+      "max": 86400,
+      "step": 1
+    },
+    "default": 1800
+  },
+  "target_groups": {
+    "description": "主动消息目标群列表",
+    "type": "list",
+    "hint": "填写群号。为空时可使用最近发生过对话的群聊作为候选目标",
+    "default": []
+  },
+  "target_users": {
+    "description": "主动消息目标用户列表",
+    "type": "list",
+    "hint": "填写 QQ 号。为空时可使用最近发生过私聊的用户作为候选目标",
+    "default": []
+  },
+  "allow_recent_sessions": {
+    "description": "允许向最近会话主动发言",
+    "type": "bool",
+    "hint": "开启后，即使未配置 target_groups/target_users，也会从插件运行后记录到的会话里选择目标",
+    "default": true
+  },
+  "context_max_messages": {
+    "description": "每个会话保留的上下文条数",
+    "type": "int",
+    "hint": "用于给 LLM 判断是否适合主动发言",
+    "slider": {
+      "min": 0,
+      "max": 500,
+      "step": 1
+    },
+    "default": 80
+  },
+  "content_max_chars": {
+    "description": "主动消息最大字数",
+    "type": "int",
+    "hint": "超过后会截断，避免 LLM 输出过长",
+    "slider": {
+      "min": 10,
+      "max": 1000,
+      "step": 1
+    },
+    "default": 120
+  },
+  "ignore_prefixes": {
+    "description": "不纳入上下文的消息前缀",
+    "type": "list",
+    "hint": "默认忽略命令消息",
+    "default": [
+      "/"
+    ]
+  },
+  "experience_provider_id": {
+    "description": "经历生成使用的 LLM 提供商",
+    "type": "string",
+    "hint": "留空则使用当前正在使用的 LLM 提供商",
+    "default": "",
+    "_special": "select_provider"
+  },
+  "decision_provider_id": {
+    "description": "主动消息决策使用的 LLM 提供商",
+    "type": "string",
+    "hint": "留空则使用当前正在使用的 LLM 提供商",
+    "default": "",
+    "_special": "select_provider"
+  },
+  "experience_prompt": {
+    "description": "经历生成提示词",
+    "type": "text",
+    "hint": "要求模型生成一个虚拟角色刚刚发生的日常见闻或经历",
+    "default": "请为一个虚拟角色生成一段刚刚发生的日常见闻或经历，80字以内，具体、自然，不要解释。"
+  },
+  "decision_prompt": {
+    "description": "主动消息决策提示词",
+    "type": "text",
+    "hint": "必须要求模型只输出 JSON，字段见默认提示词",
+    "default": "你负责决定机器人是否应该主动发言。只输出 JSON，不要 Markdown。字段: should_send(bool), delay_seconds(int), target_type('group'或'user'), target_id(string), content(string), reason(string)。主动消息必须自然、简短、像顺手分享，不要提到你在模拟经历或读取上下文。"
+  }
+}
