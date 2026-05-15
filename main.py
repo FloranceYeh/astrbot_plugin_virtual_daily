@@ -415,7 +415,7 @@ class VirtualDailyPlugin(Star):
         if usage not in {"experience", "decision"}:
             logger.warning(
                 f"VirtualDaily unknown persona usage: {usage}. "
-                'Expected "experience" or "decision".'
+                'Expected "experience" or "decision". Returning empty persona document.'
             )
             return ""
         inline_persona = self._cfg_str(f"{usage}_persona_document", "").strip()
