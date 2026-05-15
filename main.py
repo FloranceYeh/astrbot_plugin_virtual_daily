@@ -39,6 +39,7 @@ class VirtualDailyPlugin(Star):
         self._recent_messages: dict[str, deque[str]] = defaultdict(
             lambda: deque(maxlen=self._cfg_int("context_max_messages", 80))
         )
+        self._session_umos: dict[str, str] = {}
         self._loop_task: asyncio.Task | None = None
         self._send_tasks: set[asyncio.Task] = set()
         self._last_experience = ""
@@ -74,6 +75,7 @@ class VirtualDailyPlugin(Star):
 
         sender = event.get_sender_name() or event.get_sender_id()
         session_key = self._event_session_key(event)
+        self._session_umos[session_key] = event.unified_msg_origin
         self._recent_messages[session_key].append(f"{sender}: {text}")
 
     @filter.permission_type(filter.PermissionType.ADMIN)
@@ -108,7 +110,9 @@ class VirtualDailyPlugin(Star):
         topic = event.message_str.partition(" ")[2].strip()
         session_key = self._event_session_key(event)
         target_type, target_id = self._target_from_event(event)
-        experience = await self._maybe_generate_experience(topic=topic)
+        experience = await self._maybe_generate_experience(
+            topic=topic, unified_msg_origin=event.unified_msg_origin
+        )
         decision = await self._decide(
             experience=experience,
             session_key=session_key,
@@ -150,7 +154,9 @@ class VirtualDailyPlugin(Star):
             logger.warning("VirtualDaily skipped: no target group/user configured or observed")
             return
 
-        experience = await self._maybe_generate_experience()
+        experience = await self._maybe_generate_experience(
+            unified_msg_origin=self._session_umos.get(session_key)
+        )
         decision = await self._decide(
             experience=experience,
             session_key=session_key,
@@ -169,13 +175,15 @@ class VirtualDailyPlugin(Star):
         self._send_tasks.add(task)
         task.add_done_callback(self._send_tasks.discard)
 
-    async def _generate_experience(self, topic: str = "") -> str:
+    async def _generate_experience(
+        self, topic: str = "", unified_msg_origin: str | None = None
+    ) -> str:
         provider = self._get_provider(self._cfg_str("experience_provider_id", ""))
         prompt = self._cfg_str(
             "experience_prompt",
-            "请为一个虚拟角色生成一段刚刚发生的日常见闻或经历，80字以内，具体、自然，不要解释。",
+            "请以当前角色为主体生成一段刚刚发生的日常见闻或经历，80字以内，具体、自然，不要解释。",
         )
-        persona = self._load_persona_document()
+        persona = await self._load_persona_document(unified_msg_origin)
         if persona:
             prompt = (
                 f"{prompt}\n\n"
@@ -197,10 +205,14 @@ class VirtualDailyPlugin(Star):
 
         return self._fallback_experience(topic)
 
-    async def _maybe_generate_experience(self, topic: str = "") -> str:
+    async def _maybe_generate_experience(
+        self, topic: str = "", unified_msg_origin: str | None = None
+    ) -> str:
         if not self._should_include_experience():
             return ""
-        return await self._generate_experience(topic=topic)
+        return await self._generate_experience(
+            topic=topic, unified_msg_origin=unified_msg_origin
+        )
 
     async def _decide(
         self,
@@ -316,7 +328,13 @@ class VirtualDailyPlugin(Star):
     def _get_provider(self, provider_id: str):
         return self.context.get_provider_by_id(provider_id) or self.context.get_using_provider()
 
-    def _load_persona_document(self) -> str:
+    async def _load_persona_document(self, unified_msg_origin: str | None = None) -> str:
+        text = ""
+        if self._cfg_bool("use_astrbot_persona", True):
+            text = await self._load_astrbot_persona(unified_msg_origin)
+            if text:
+                return self._limit_persona_document(text)
+
         inline_persona = self._cfg_str("persona_document", "").strip()
         path = self._cfg_str("persona_document_path", "").strip()
         text = inline_persona
@@ -332,6 +350,57 @@ class VirtualDailyPlugin(Star):
             except OSError as e:
                 logger.warning(f"VirtualDaily failed to read persona document: {e}")
 
+        return self._limit_persona_document(text)
+
+    async def _load_astrbot_persona(self, unified_msg_origin: str | None) -> str:
+        persona_manager = getattr(self.context, "persona_manager", None)
+        if not persona_manager:
+            return ""
+
+        try:
+            if unified_msg_origin:
+                curr_cid = await self.context.conversation_manager.get_curr_conversation_id(
+                    unified_msg_origin
+                )
+                conversation = None
+                if curr_cid:
+                    conversation = await self.context.conversation_manager.get_conversation(
+                        unified_msg_origin, curr_cid
+                    )
+                if conversation and getattr(conversation, "persona_id", None):
+                    persona = persona_manager.get_persona(conversation.persona_id)
+                else:
+                    persona = persona_manager.get_default_persona_v3(unified_msg_origin)
+            else:
+                persona = persona_manager.get_default_persona_v3(None)
+        except Exception as e:
+            logger.warning(f"VirtualDaily failed to load AstrBot persona: {e}")
+            return ""
+
+        return self._persona_to_text(persona)
+
+    @staticmethod
+    def _persona_to_text(persona: Any) -> str:
+        if not persona:
+            return ""
+        if isinstance(persona, str):
+            return persona.strip()
+        if isinstance(persona, dict):
+            return str(
+                persona.get("system_prompt")
+                or persona.get("prompt")
+                or persona.get("content")
+                or ""
+            ).strip()
+        return str(
+            getattr(persona, "system_prompt", None)
+            or getattr(persona, "prompt", None)
+            or getattr(persona, "content", None)
+            or ""
+        ).strip()
+
+    def _limit_persona_document(self, text: str) -> str:
+        text = text.strip()
         max_chars = max(0, self._cfg_int("persona_document_max_chars", 4000))
         if max_chars and len(text) > max_chars:
             return text[:max_chars]
@@ -403,14 +472,11 @@ class VirtualDailyPlugin(Star):
 
         max_chars = max(1, self._cfg_int("split_message_max_chars", 80))
         regex = self._cfg_str("split_message_regex", "").strip()
-        split_words = self._cfg_list("split_message_words", [])
-        separators = split_words or self._cfg_list(
-            "split_message_separators", ["\n", "。", "！", "？", "，"]
-        )
+        split_words = self._cfg_list("split_message_words", ["\n", "。", "！", "？", "，"])
         parts: list[str] = []
         remaining = text
         while len(remaining) > max_chars:
-            cut = self._find_split_index(remaining, max_chars, separators, regex)
+            cut = self._find_split_index(remaining, max_chars, split_words, regex)
             parts.append(remaining[:cut].strip())
             remaining = remaining[cut:].strip()
         if remaining:

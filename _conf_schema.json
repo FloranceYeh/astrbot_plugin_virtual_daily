@@ -143,13 +143,7 @@
   "split_message_words": {
     "description": "自定义消息分割词",
     "type": "list",
-    "hint": "正则为空时生效，会优先在这些词之后切开消息；为空则使用兼容的 split_message_separators",
-    "default": []
-  },
-  "split_message_separators": {
-    "description": "消息分割优先标点（兼容旧配置）",
-    "type": "list",
-    "hint": "旧版配置项。split_message_words 为空时会使用这里的分隔符",
+    "hint": "正则为空时生效，会优先在这些词之后切开消息",
     "default": [
       "\n",
       "。",
@@ -180,14 +174,20 @@
     "default": "",
     "_special": "select_provider"
   },
+  "use_astrbot_persona": {
+    "description": "使用 AstrBot 内置人格文档",
+    "type": "bool",
+    "hint": "开启后优先按当前会话读取 AstrBot 内置人格；读取不到时再使用下方手动人格文档配置",
+    "default": true
+  },
   "persona_document": {
-    "description": "角色人格文档内容",
+    "description": "备用角色人格文档内容",
     "type": "text",
-    "hint": "生成见闻时会作为当前角色人格参考；如果同时配置路径，路径文件内容优先",
+    "hint": "当关闭内置人格或内置人格读取失败时使用；如果同时配置路径，路径文件内容优先",
     "default": ""
   },
   "persona_document_path": {
-    "description": "角色人格文档路径",
+    "description": "备用角色人格文档路径",
     "type": "string",
     "hint": "相对路径以插件目录为基准，文件需使用 UTF-8 编码；配置后优先读取该文件",
     "default": ""
