@@ -197,28 +197,40 @@
     "default": "",
     "_special": "select_provider"
   },
-  "use_astrbot_persona": {
-    "description": "使用 AstrBot 内置人格文档",
-    "type": "bool",
-    "hint": "兼容旧配置。persona_source 留空时，开启后优先按当前会话读取 AstrBot 内置人格；读取不到时再使用下方手动人格文档配置",
-    "default": true
+  "experience_persona_document": {
+    "description": "见闻生成人格文档内容",
+    "type": "text",
+    "hint": "仅用于生成见闻；如果同时配置路径，路径文件内容优先",
+    "default": ""
   },
-  "persona_source": {
-    "description": "人格文档来源",
+  "experience_persona_document_path": {
+    "description": "见闻生成人格文档路径",
     "type": "string",
-    "hint": "astrbot=生成见闻和主动消息都优先使用 AstrBot 当前会话人格，读取不到时使用备用人格；manual=只使用下方备用人格；none=不注入人格。留空则使用旧配置 use_astrbot_persona",
-    "default": "astrbot"
+    "hint": "仅用于生成见闻；相对路径以插件目录为基准，文件需使用 UTF-8 编码",
+    "default": ""
+  },
+  "decision_persona_document": {
+    "description": "主动消息人格文档内容",
+    "type": "text",
+    "hint": "仅用于主动消息决策和内容生成；如果同时配置路径，路径文件内容优先",
+    "default": ""
+  },
+  "decision_persona_document_path": {
+    "description": "主动消息人格文档路径",
+    "type": "string",
+    "hint": "仅用于主动消息决策和内容生成；相对路径以插件目录为基准，文件需使用 UTF-8 编码",
+    "default": ""
   },
   "persona_document": {
-    "description": "备用角色人格文档内容",
+    "description": "通用人格文档内容（兼容旧配置）",
     "type": "text",
-    "hint": "当关闭内置人格或内置人格读取失败时使用；如果同时配置路径，路径文件内容优先",
+    "hint": "当专用人格文档未配置时作为回退使用；如果同时配置路径，路径文件内容优先",
     "default": ""
   },
   "persona_document_path": {
-    "description": "备用角色人格文档路径",
+    "description": "通用人格文档路径（兼容旧配置）",
     "type": "string",
-    "hint": "相对路径以插件目录为基准，文件需使用 UTF-8 编码；配置后优先读取该文件",
+    "hint": "当专用人格文档路径未配置时作为回退使用；相对路径以插件目录为基准，文件需使用 UTF-8 编码",
     "default": ""
   },
   "persona_document_max_chars": {

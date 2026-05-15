@@ -104,7 +104,7 @@ class VirtualDailyPlugin(Star):
             f"检查间隔: {self._cfg_int('interval_minutes', 60)} 分钟",
             f"延迟区间: {self._delay_bounds()[0]}-{self._delay_bounds()[1]} 秒",
             f"见闻策略: {self._experience_policy()}",
-            f"人格来源: {self._persona_source()}",
+            "人格来源: 用户配置文档",
             f"消息分割: {'启用' if self._cfg_bool('split_messages_enabled', False) else '关闭'}",
             f"已记录会话: {len(self._recent_messages)} 个",
             f"上次运行: {self._format_ts(self._last_run_at)}",
@@ -214,7 +214,7 @@ class VirtualDailyPlugin(Star):
             "请以当前角色为主体生成一段刚刚发生的日常见闻或经历，80字以内，具体、自然，不要解释。",
         )
         time_info = self._build_time_info()
-        persona = await self._load_persona_document(unified_msg_origin)
+        persona = await self._load_persona_document("experience")
         recent_context = list(self._recent_messages.get(session_key, []))
 
         system_prompt = (
@@ -278,7 +278,7 @@ class VirtualDailyPlugin(Star):
             return ProactiveDecision(False, 0, fallback_target_type, fallback_target_id, "", "未配置可用 LLM")
 
         contexts = list(self._recent_messages.get(session_key, []))
-        persona = await self._load_persona_document(self._session_umos.get(session_key))
+        persona = await self._load_persona_document("decision")
         target_hint = {
             "target_type": fallback_target_type,
             "target_id": fallback_target_id,
@@ -411,22 +411,13 @@ class VirtualDailyPlugin(Star):
     def _get_provider(self, provider_id: str):
         return self.context.get_provider_by_id(provider_id) or self.context.get_using_provider()
 
-    async def _load_persona_document(self, unified_msg_origin: str | None = None) -> str:
-        text = ""
-        source = self._persona_source()
-        if source == "none":
-            return ""
-
-        if source == "astrbot":
-            text = await self._load_astrbot_persona(unified_msg_origin)
-            if text:
-                return self._limit_persona_document(text)
-
-        if source not in {"astrbot", "manual"}:
-            return ""
-
-        inline_persona = self._cfg_str("persona_document", "").strip()
-        path = self._cfg_str("persona_document_path", "").strip()
+    async def _load_persona_document(self, usage: str) -> str:
+        usage = "experience" if usage == "experience" else "decision"
+        inline_persona = self._cfg_str(f"{usage}_persona_document", "").strip()
+        path = self._cfg_str(f"{usage}_persona_document_path", "").strip()
+        if not inline_persona and not path:
+            inline_persona = self._cfg_str("persona_document", "").strip()
+            path = self._cfg_str("persona_document_path", "").strip()
         text = inline_persona
 
         if path:
@@ -441,33 +432,6 @@ class VirtualDailyPlugin(Star):
                 logger.warning(f"VirtualDaily failed to read persona document: {e}")
 
         return self._limit_persona_document(text)
-
-    async def _load_astrbot_persona(self, unified_msg_origin: str | None) -> str:
-        persona_manager = getattr(self.context, "persona_manager", None)
-        if not persona_manager:
-            return ""
-
-        try:
-            if unified_msg_origin:
-                curr_cid = await self.context.conversation_manager.get_curr_conversation_id(
-                    unified_msg_origin
-                )
-                conversation = None
-                if curr_cid:
-                    conversation = await self.context.conversation_manager.get_conversation(
-                        unified_msg_origin, curr_cid
-                    )
-                if conversation and getattr(conversation, "persona_id", None):
-                    persona = persona_manager.get_persona(conversation.persona_id)
-                else:
-                    persona = persona_manager.get_default_persona_v3(unified_msg_origin)
-            else:
-                persona = persona_manager.get_default_persona_v3(None)
-        except Exception as e:
-            logger.warning(f"VirtualDaily failed to load AstrBot persona: {e}")
-            return ""
-
-        return self._persona_to_text(persona)
 
     async def _append_to_astrbot_context(self, session_key: str, content: str):
         if not self._cfg_bool("add_sent_message_to_astrbot_context", True):
@@ -507,26 +471,6 @@ class VirtualDailyPlugin(Star):
             )
         except Exception as e:
             logger.warning(f"VirtualDaily failed to append AstrBot context: {e}")
-
-    @staticmethod
-    def _persona_to_text(persona: Any) -> str:
-        if not persona:
-            return ""
-        if isinstance(persona, str):
-            return persona.strip()
-        if isinstance(persona, dict):
-            return str(
-                persona.get("system_prompt")
-                or persona.get("prompt")
-                or persona.get("content")
-                or ""
-            ).strip()
-        return str(
-            getattr(persona, "system_prompt", None)
-            or getattr(persona, "prompt", None)
-            or getattr(persona, "content", None)
-            or ""
-        ).strip()
 
     def _limit_persona_document(self, text: str) -> str:
         text = text.strip()
@@ -606,12 +550,6 @@ class VirtualDailyPlugin(Star):
         if policy in {"probability", "probabilistic", "random", "chance"}:
             return "probability"
         return "always"
-
-    def _persona_source(self) -> str:
-        source = self._cfg_str("persona_source", "").strip().lower()
-        if source in {"astrbot", "manual", "none"}:
-            return source
-        return "astrbot" if self._cfg_bool("use_astrbot_persona", True) else "manual"
 
     def _should_include_experience(self) -> bool:
         policy = self._experience_policy()
