@@ -45,6 +45,8 @@ class VirtualDailyPlugin(Star):
         self._last_experience = ""
         self._last_decision: ProactiveDecision | None = None
         self._last_run_at = 0.0
+        self._trigger_times: list[float] = []
+        self._unanswered_counts: dict[str, int] = defaultdict(int)
 
     async def initialize(self):
         if self._cfg_bool("enabled", True):
@@ -69,6 +71,9 @@ class VirtualDailyPlugin(Star):
             self.client = event.bot
             logger.debug("VirtualDaily AIOCQHTTP client initialized")
 
+        if self._is_self_message(event):
+            return
+
         text = (event.message_str or "").strip()
         if not text or text.startswith(tuple(self._cfg_list("ignore_prefixes", ["/"]))):
             return
@@ -77,6 +82,9 @@ class VirtualDailyPlugin(Star):
         session_key = self._event_session_key(event)
         self._session_umos[session_key] = event.unified_msg_origin
         self._recent_messages[session_key].append(f"{sender}: {text}")
+        if self._unanswered_counts.get(session_key, 0) > 0:
+            self._unanswered_counts[session_key] = 0
+            logger.info(f"VirtualDaily reply observed, unanswered count reset: {session_key}")
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("虚拟日常状态", alias={"日常状态"})
@@ -90,6 +98,9 @@ class VirtualDailyPlugin(Star):
             f"消息分割: {'启用' if self._cfg_bool('split_messages_enabled', False) else '关闭'}",
             f"已记录会话: {len(self._recent_messages)} 个",
             f"上次运行: {self._format_ts(self._last_run_at)}",
+            f"触发次数: {len(self._trigger_times)}",
+            f"触发时间: {self._format_trigger_times()}",
+            f"未回应计数: {self._format_unanswered_counts()}",
             f"上次经历: {self._last_experience or '无'}",
         ]
         if decision:
@@ -110,6 +121,7 @@ class VirtualDailyPlugin(Star):
         topic = event.message_str.partition(" ")[2].strip()
         session_key = self._event_session_key(event)
         target_type, target_id = self._target_from_event(event)
+        self._record_trigger("manual", session_key)
         experience = await self._maybe_generate_experience(
             topic=topic, unified_msg_origin=event.unified_msg_origin
         )
@@ -154,6 +166,7 @@ class VirtualDailyPlugin(Star):
             logger.warning("VirtualDaily skipped: no target group/user configured or observed")
             return
 
+        self._record_trigger("scheduled", session_key)
         experience = await self._maybe_generate_experience(
             unified_msg_origin=self._session_umos.get(session_key)
         )
@@ -247,8 +260,11 @@ class VirtualDailyPlugin(Star):
                 "instruction": (
                     "如果 experience 为空，不要编造见闻，只自然地询问用户近况。"
                     "如果 experience 不为空，可以按聊天氛围选择分享见闻或询问近况。"
+                    "如果 unanswered_proactive_count 较高，说明前几次主动消息没有被回应，"
+                    "可以适当降低热情、表现得更克制或轻微失落，但不要责备用户。"
                 ),
                 "recent_context": contexts[-self._cfg_int("context_max_messages", 80) :],
+                "unanswered_proactive_count": self._unanswered_counts.get(session_key, 0),
                 "fallback_target": target_hint,
                 "min_delay_seconds": self._delay_bounds()[0],
                 "max_delay_seconds": self._cfg_int("max_delay_seconds", 1800),
@@ -282,7 +298,7 @@ class VirtualDailyPlugin(Star):
                     message=[{"type": "text", "data": {"text": part}}],
                 )
                 await self._sleep_between_split_messages()
-            self._append_proactive_context(decision)
+            self._record_proactive_sent(decision)
             return
 
         for part in self._split_message(decision.content):
@@ -291,18 +307,21 @@ class VirtualDailyPlugin(Star):
                 message=[{"type": "text", "data": {"text": part}}],
             )
             await self._sleep_between_split_messages()
-        self._append_proactive_context(decision)
+        self._record_proactive_sent(decision)
 
-    def _append_proactive_context(self, decision: ProactiveDecision):
-        if not self._cfg_bool("add_sent_message_to_context", True):
-            return
-
+    def _record_proactive_sent(self, decision: ProactiveDecision):
         content = decision.content.strip()
         if not content:
             return
 
         session_key = f"{decision.target_type}:{decision.target_id}"
-        self._recent_messages[session_key].append(f"机器人: {content}")
+        if self._cfg_bool("add_sent_message_to_context", True):
+            self._recent_messages[session_key].append(f"机器人: {content}")
+        self._unanswered_counts[session_key] += 1
+        logger.info(
+            "VirtualDaily proactive message sent, unanswered count "
+            f"{self._unanswered_counts[session_key]}: {session_key}"
+        )
 
     def _parse_decision(
         self, data: dict[str, Any], fallback_target_type: str, fallback_target_id: str
@@ -452,6 +471,30 @@ class VirtualDailyPlugin(Star):
         jitter = max(0, self._cfg_int("interval_jitter_seconds", 600))
         return max(1, base + random.randint(-jitter, jitter))
 
+    def _record_trigger(self, trigger_type: str, session_key: str):
+        now = time.time()
+        self._last_run_at = now
+        self._trigger_times.append(now)
+        max_records = max(0, self._cfg_int("trigger_time_history_limit", 20))
+        if max_records and len(self._trigger_times) > max_records:
+            self._trigger_times = self._trigger_times[-max_records:]
+        logger.info(
+            f"VirtualDaily triggered ({trigger_type}) at {self._format_ts(now)}: {session_key}"
+        )
+
+    def _is_self_message(self, event: AiocqhttpMessageEvent) -> bool:
+        sender_id = str(event.get_sender_id() or "")
+        if not sender_id:
+            return False
+
+        candidates = [
+            getattr(event, "self_id", None),
+            getattr(getattr(event, "message_obj", None), "self_id", None),
+            getattr(self.client, "self_id", None),
+            getattr(self.client, "uin", None),
+        ]
+        return any(str(candidate) == sender_id for candidate in candidates if candidate)
+
     def _delay_bounds(self) -> tuple[int, int]:
         min_delay = max(0, self._cfg_int("min_delay_seconds", 0))
         max_delay = max(0, self._cfg_int("max_delay_seconds", 1800))
@@ -571,6 +614,19 @@ class VirtualDailyPlugin(Star):
         timezone_name = self.context.get_config().get("timezone") or "Asia/Shanghai"
         tz = zoneinfo.ZoneInfo(timezone_name)
         return datetime.fromtimestamp(ts, tz).strftime("%Y-%m-%d %H:%M:%S")
+
+    def _format_trigger_times(self) -> str:
+        if not self._trigger_times:
+            return "无"
+        return "、".join(self._format_ts(ts) for ts in self._trigger_times)
+
+    def _format_unanswered_counts(self) -> str:
+        active_counts = {
+            key: count for key, count in self._unanswered_counts.items() if count > 0
+        }
+        if not active_counts:
+            return "无"
+        return "，".join(f"{key}={count}" for key, count in sorted(active_counts.items()))
 
     @staticmethod
     def _as_bool(value: Any, default: bool = False) -> bool:

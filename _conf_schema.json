@@ -27,6 +27,17 @@
     },
     "default": 600
   },
+  "trigger_time_history_limit": {
+    "description": "触发时间保留条数",
+    "type": "int",
+    "hint": "状态命令里保留最近多少次虚拟日常触发时间；0 表示不限制",
+    "slider": {
+      "min": 0,
+      "max": 500,
+      "step": 1
+    },
+    "default": 20
+  },
   "min_delay_seconds": {
     "description": "最小发送延迟（秒）",
     "type": "int",
