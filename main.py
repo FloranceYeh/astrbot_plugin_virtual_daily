@@ -19,6 +19,15 @@ from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import (
 )
 from astrbot.core.provider.provider import Provider
 
+try:
+    from astrbot.core.agent.message import (
+        AssistantMessageSegment,
+        TextPart,
+    )
+except ImportError:
+    AssistantMessageSegment = None
+    TextPart = None
+
 
 @dataclass
 class ProactiveDecision:
@@ -468,49 +477,28 @@ class VirtualDailyPlugin(Star):
             if not curr_cid:
                 return
 
-            methods = (
-                "append_conversation",
-                "append_message",
-                "add_message",
-                "update_conversation",
-            )
-            for method_name in methods:
-                method = getattr(conversation_manager, method_name, None)
-                if not method:
-                    continue
-                if await self._try_append_conversation_message(
-                    method, unified_msg_origin, curr_cid, content
-                ):
-                    logger.debug(
-                        f"VirtualDaily appended proactive message to AstrBot context: {session_key}"
-                    )
-                    return
+            add_message_pair = getattr(conversation_manager, "add_message_pair", None)
+            if add_message_pair and AssistantMessageSegment and TextPart:
+                assistant_message = AssistantMessageSegment(
+                    content=[TextPart(text=content)],
+                )
+                result = add_message_pair(
+                    cid=curr_cid,
+                    user_message=None,
+                    assistant_message=assistant_message,
+                )
+                if hasattr(result, "__await__"):
+                    await result
+                logger.debug(
+                    f"VirtualDaily appended proactive message to AstrBot context: {session_key}"
+                )
+                return
             logger.warning(
                 "VirtualDaily could not append proactive message to AstrBot context: "
-                "no compatible conversation_manager method found"
+                "add_message_pair or message segment classes are unavailable"
             )
         except Exception as e:
             logger.warning(f"VirtualDaily failed to append AstrBot context: {e}")
-
-    async def _try_append_conversation_message(
-        self, method: Any, unified_msg_origin: str, conversation_id: str, content: str
-    ) -> bool:
-        message = {"role": "assistant", "content": content}
-        call_patterns = (
-            lambda: method(unified_msg_origin, conversation_id, message),
-            lambda: method(unified_msg_origin, conversation_id, [message]),
-            lambda: method(unified_msg_origin, conversation_id, "assistant", content),
-            lambda: method(unified_msg_origin, conversation_id, content),
-        )
-        for call in call_patterns:
-            try:
-                result = call()
-                if hasattr(result, "__await__"):
-                    await result
-                return True
-            except TypeError:
-                continue
-        return False
 
     @staticmethod
     def _persona_to_text(persona: Any) -> str:
