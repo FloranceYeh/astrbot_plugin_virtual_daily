@@ -413,13 +413,18 @@ class VirtualDailyPlugin(Star):
 
     async def _load_persona_document(self, usage: str) -> str:
         if usage not in {"experience", "decision"}:
-            logger.warning(f"VirtualDaily unknown persona usage: {usage}")
+            logger.warning(
+                f"VirtualDaily unknown persona usage: {usage}. "
+                'Expected "experience" or "decision".'
+            )
             return ""
         inline_persona = self._cfg_str(f"{usage}_persona_document", "").strip()
         path = self._cfg_str(f"{usage}_persona_document_path", "").strip()
         if not inline_persona and not path:
-            inline_persona = self._cfg_str("persona_document", "").strip()
-            path = self._cfg_str("persona_document_path", "").strip()
+            fallback_inline = self._cfg_str("persona_document", "").strip()
+            fallback_path = self._cfg_str("persona_document_path", "").strip()
+            inline_persona = fallback_inline
+            path = fallback_path
         text = inline_persona
 
         if path:
