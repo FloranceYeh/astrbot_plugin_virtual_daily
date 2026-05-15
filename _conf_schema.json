@@ -64,7 +64,7 @@
     "description": "见闻发送策略",
     "type": "string",
     "hint": "always=总是把见闻交给大模型；never=不发送见闻，只让大模型询问用户近况；probability=按概率发送见闻",
-    "default": "always"
+    "default": "probability"
   },
   "experience_send_probability": {
     "description": "见闻发送概率（%）",
@@ -110,6 +110,12 @@
     "description": "发送后写入上下文",
     "type": "bool",
     "hint": "开启后，主动消息成功发送后会把发送内容追加到对应会话上下文，供后续主动发言决策参考",
+    "default": true
+  },
+  "add_sent_message_to_astrbot_context": {
+    "description": "发送后写入 AstrBot 对话历史",
+    "type": "bool",
+    "hint": "开启后，会尝试把主动消息同步写入 AstrBot 当前会话历史，让后续普通对话也能感知这条主动发言；若当前 AstrBot 版本没有兼容接口，会自动跳过并记录日志",
     "default": true
   },
   "content_max_chars": {

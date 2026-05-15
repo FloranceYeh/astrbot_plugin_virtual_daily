@@ -17,6 +17,7 @@
 - `target_groups` / `target_users`：主动消息候选目标。建议至少配置一个群号或用户号。
 - `allow_recent_sessions`：开启后会把插件运行期间记录到的群聊或私聊也作为候选目标。
 - `add_sent_message_to_context`：开启后，主动消息成功发送后会把发送内容追加到对应会话上下文。
+- `add_sent_message_to_astrbot_context`：开启后，会尝试把主动消息同步写入 AstrBot 当前会话历史，让后续普通对话也能感知。
 - `trigger_time_history_limit`：状态里保留的最近触发时间条数，0 表示不限制。
 - `interval_minutes`：每次生成经历并决策的基础间隔。
 - `min_delay_seconds` / `max_delay_seconds`：LLM 决定发送时允许的发送延迟区间。
