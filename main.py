@@ -412,7 +412,9 @@ class VirtualDailyPlugin(Star):
         return self.context.get_provider_by_id(provider_id) or self.context.get_using_provider()
 
     async def _load_persona_document(self, usage: str) -> str:
-        usage = "experience" if usage == "experience" else "decision"
+        if usage not in {"experience", "decision"}:
+            logger.warning(f"VirtualDaily unknown persona usage: {usage}")
+            return ""
         inline_persona = self._cfg_str(f"{usage}_persona_document", "").strip()
         path = self._cfg_str(f"{usage}_persona_document_path", "").strip()
         if not inline_persona and not path:
