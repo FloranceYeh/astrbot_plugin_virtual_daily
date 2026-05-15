@@ -421,11 +421,11 @@ class VirtualDailyPlugin(Star):
         inline_persona = self._cfg_str(f"{usage}_persona_document", "").strip()
         path = self._cfg_str(f"{usage}_persona_document_path", "").strip()
         if not inline_persona and not path:
-            fallback_inline = self._cfg_str("persona_document", "").strip()
-            fallback_path = self._cfg_str("persona_document_path", "").strip()
-            inline_persona = fallback_inline
-            path = fallback_path
-        text = inline_persona
+            inline_persona, path = (
+                self._cfg_str("persona_document", "").strip(),
+                self._cfg_str("persona_document_path", "").strip(),
+            )
+        text = ""
 
         if path:
             try:
@@ -437,6 +437,8 @@ class VirtualDailyPlugin(Star):
                     text = file_text
             except OSError as e:
                 logger.warning(f"VirtualDaily failed to read persona document: {e}")
+        else:
+            text = inline_persona
 
         return self._limit_persona_document(text)
 
