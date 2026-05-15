@@ -16,6 +16,7 @@
 
 - `target_groups` / `target_users`：主动消息候选目标。建议至少配置一个群号或用户号。
 - `allow_recent_sessions`：开启后会把插件运行期间记录到的群聊或私聊也作为候选目标。
+- `add_sent_message_to_context`：开启后，主动消息成功发送后会把发送内容追加到对应会话上下文。
 - `interval_minutes`：每次生成经历并决策的基础间隔。
 - `min_delay_seconds` / `max_delay_seconds`：LLM 决定发送时允许的发送延迟区间。
 - `experience_send_policy`：见闻发送策略，`always` 总是提供见闻，`never` 不提供见闻只询问用户近况，`probability` 按概率提供见闻。

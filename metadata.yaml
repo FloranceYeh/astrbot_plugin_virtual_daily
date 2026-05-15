@@ -2,6 +2,6 @@ name: astrbot_plugin_virtual_daily
 display_name: 虚拟日常
 desc: 定时生成虚拟见闻或经历，并由大模型结合上下文决定是否发送主动消息、发送时间和内容
 help: 使用“虚拟日常状态”查看状态，使用“虚拟日常触发 [主题]”手动触发一次
-version: v0.2.0
+version: v0.6.0
 author: Florance
 repo: ""

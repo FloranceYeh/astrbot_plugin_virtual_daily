@@ -95,6 +95,12 @@
     },
     "default": 80
   },
+  "add_sent_message_to_context": {
+    "description": "发送后写入上下文",
+    "type": "bool",
+    "hint": "开启后，主动消息成功发送后会把发送内容追加到对应会话上下文，供后续主动发言决策参考",
+    "default": true
+  },
   "content_max_chars": {
     "description": "主动消息最大字数",
     "type": "int",

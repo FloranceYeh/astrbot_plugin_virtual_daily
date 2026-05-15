@@ -282,6 +282,7 @@ class VirtualDailyPlugin(Star):
                     message=[{"type": "text", "data": {"text": part}}],
                 )
                 await self._sleep_between_split_messages()
+            self._append_proactive_context(decision)
             return
 
         for part in self._split_message(decision.content):
@@ -290,6 +291,18 @@ class VirtualDailyPlugin(Star):
                 message=[{"type": "text", "data": {"text": part}}],
             )
             await self._sleep_between_split_messages()
+        self._append_proactive_context(decision)
+
+    def _append_proactive_context(self, decision: ProactiveDecision):
+        if not self._cfg_bool("add_sent_message_to_context", True):
+            return
+
+        content = decision.content.strip()
+        if not content:
+            return
+
+        session_key = f"{decision.target_type}:{decision.target_id}"
+        self._recent_messages[session_key].append(f"机器人: {content}")
 
     def _parse_decision(
         self, data: dict[str, Any], fallback_target_type: str, fallback_target_id: str
