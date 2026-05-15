@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import random
 import re
 import time
@@ -84,6 +85,7 @@ class VirtualDailyPlugin(Star):
             f"检查间隔: {self._cfg_int('interval_minutes', 60)} 分钟",
             f"延迟区间: {self._delay_bounds()[0]}-{self._delay_bounds()[1]} 秒",
             f"见闻策略: {self._experience_policy()}",
+            f"消息分割: {'启用' if self._cfg_bool('split_messages_enabled', False) else '关闭'}",
             f"已记录会话: {len(self._recent_messages)} 个",
             f"上次运行: {self._format_ts(self._last_run_at)}",
             f"上次经历: {self._last_experience or '无'}",
@@ -173,6 +175,14 @@ class VirtualDailyPlugin(Star):
             "experience_prompt",
             "请为一个虚拟角色生成一段刚刚发生的日常见闻或经历，80字以内，具体、自然，不要解释。",
         )
+        persona = self._load_persona_document()
+        if persona:
+            prompt = (
+                f"{prompt}\n\n"
+                "当前角色人格文档如下。生成见闻时必须符合角色的人格、语气、生活习惯和设定；"
+                "不要复述人格文档，也不要说明你参考了文档。\n"
+                f"{persona}"
+            )
         if topic:
             prompt += f"\n额外主题: {topic}"
 
@@ -254,16 +264,20 @@ class VirtualDailyPlugin(Star):
             return
 
         if decision.target_type == "user":
-            await self.client.send_private_msg(
-                user_id=int(decision.target_id),
-                message=[{"type": "text", "data": {"text": decision.content}}],
-            )
+            for part in self._split_message(decision.content):
+                await self.client.send_private_msg(
+                    user_id=int(decision.target_id),
+                    message=[{"type": "text", "data": {"text": part}}],
+                )
+                await self._sleep_between_split_messages()
             return
 
-        await self.client.send_group_msg(
-            group_id=int(decision.target_id),
-            message=[{"type": "text", "data": {"text": decision.content}}],
-        )
+        for part in self._split_message(decision.content):
+            await self.client.send_group_msg(
+                group_id=int(decision.target_id),
+                message=[{"type": "text", "data": {"text": part}}],
+            )
+            await self._sleep_between_split_messages()
 
     def _parse_decision(
         self, data: dict[str, Any], fallback_target_type: str, fallback_target_id: str
@@ -301,6 +315,27 @@ class VirtualDailyPlugin(Star):
 
     def _get_provider(self, provider_id: str):
         return self.context.get_provider_by_id(provider_id) or self.context.get_using_provider()
+
+    def _load_persona_document(self) -> str:
+        inline_persona = self._cfg_str("persona_document", "").strip()
+        path = self._cfg_str("persona_document_path", "").strip()
+        text = inline_persona
+
+        if path:
+            try:
+                if not os.path.isabs(path):
+                    path = os.path.join(os.path.dirname(__file__), path)
+                with open(path, "r", encoding="utf-8") as f:
+                    file_text = f.read().strip()
+                if file_text:
+                    text = file_text
+            except OSError as e:
+                logger.warning(f"VirtualDaily failed to read persona document: {e}")
+
+        max_chars = max(0, self._cfg_int("persona_document_max_chars", 4000))
+        if max_chars and len(text) > max_chars:
+            return text[:max_chars]
+        return text
 
     def _pick_target(self) -> tuple[str, str, str]:
         groups = [str(x) for x in self._cfg_list("target_groups", []) if str(x).isdigit()]
@@ -358,6 +393,61 @@ class VirtualDailyPlugin(Star):
             chance = self._clamp_int(self.config.get("experience_send_probability", 50), 0, 100)
             return random.randint(1, 100) <= chance
         return True
+
+    def _split_message(self, content: str) -> list[str]:
+        text = content.strip()
+        if not text:
+            return []
+        if not self._cfg_bool("split_messages_enabled", False):
+            return [text]
+
+        max_chars = max(1, self._cfg_int("split_message_max_chars", 80))
+        regex = self._cfg_str("split_message_regex", "").strip()
+        split_words = self._cfg_list("split_message_words", [])
+        separators = split_words or self._cfg_list(
+            "split_message_separators", ["\n", "。", "！", "？", "，"]
+        )
+        parts: list[str] = []
+        remaining = text
+        while len(remaining) > max_chars:
+            cut = self._find_split_index(remaining, max_chars, separators, regex)
+            parts.append(remaining[:cut].strip())
+            remaining = remaining[cut:].strip()
+        if remaining:
+            parts.append(remaining)
+        return [part for part in parts if part]
+
+    @staticmethod
+    def _find_split_index(
+        text: str, max_chars: int, separators: list[Any], regex: str = ""
+    ) -> int:
+        window = text[: max_chars + 1]
+        if regex:
+            try:
+                matches = list(re.finditer(regex, window))
+            except re.error as e:
+                logger.warning(f"VirtualDaily split regex is invalid: {e}")
+                matches = []
+            if matches:
+                match = matches[-1]
+                cut = match.end() if match.end() > match.start() else match.start()
+                if cut > 0:
+                    return cut
+
+        best = -1
+        for separator in separators:
+            sep = str(separator)
+            if not sep:
+                continue
+            index = window.rfind(sep)
+            if index > best:
+                best = index + len(sep)
+        return best if best > 0 else max_chars
+
+    async def _sleep_between_split_messages(self):
+        delay = max(0, self._cfg_int("split_message_interval_ms", 800))
+        if delay:
+            await asyncio.sleep(delay / 1000)
 
     def _fallback_experience(self, topic: str = "") -> str:
         places = ["便利店", "路口", "窗边", "电梯里", "楼下", "书桌前"]

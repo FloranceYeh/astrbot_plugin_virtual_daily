@@ -106,6 +106,58 @@
     },
     "default": 120
   },
+  "split_messages_enabled": {
+    "description": "启用消息分割",
+    "type": "bool",
+    "hint": "开启后，主动消息会按长度和标点分成多条发送",
+    "default": false
+  },
+  "split_message_max_chars": {
+    "description": "单条分割消息最大字数",
+    "type": "int",
+    "hint": "启用消息分割后，每条消息尽量不超过这个长度",
+    "slider": {
+      "min": 1,
+      "max": 1000,
+      "step": 1
+    },
+    "default": 80
+  },
+  "split_message_interval_ms": {
+    "description": "分割消息发送间隔（毫秒）",
+    "type": "int",
+    "hint": "多条消息之间的等待时间",
+    "slider": {
+      "min": 0,
+      "max": 10000,
+      "step": 100
+    },
+    "default": 800
+  },
+  "split_message_regex": {
+    "description": "消息分割正则",
+    "type": "string",
+    "hint": "填写后优先按正则匹配位置分割；例如 [。！？\\n]+ 会在句末或换行处分割。留空则使用自定义分割词",
+    "default": ""
+  },
+  "split_message_words": {
+    "description": "自定义消息分割词",
+    "type": "list",
+    "hint": "正则为空时生效，会优先在这些词之后切开消息；为空则使用兼容的 split_message_separators",
+    "default": []
+  },
+  "split_message_separators": {
+    "description": "消息分割优先标点（兼容旧配置）",
+    "type": "list",
+    "hint": "旧版配置项。split_message_words 为空时会使用这里的分隔符",
+    "default": [
+      "\n",
+      "。",
+      "！",
+      "？",
+      "，"
+    ]
+  },
   "ignore_prefixes": {
     "description": "不纳入上下文的消息前缀",
     "type": "list",
@@ -128,11 +180,34 @@
     "default": "",
     "_special": "select_provider"
   },
+  "persona_document": {
+    "description": "角色人格文档内容",
+    "type": "text",
+    "hint": "生成见闻时会作为当前角色人格参考；如果同时配置路径，路径文件内容优先",
+    "default": ""
+  },
+  "persona_document_path": {
+    "description": "角色人格文档路径",
+    "type": "string",
+    "hint": "相对路径以插件目录为基准，文件需使用 UTF-8 编码；配置后优先读取该文件",
+    "default": ""
+  },
+  "persona_document_max_chars": {
+    "description": "人格文档最大读取字数",
+    "type": "int",
+    "hint": "避免人格文档过长导致提示词过大；0 表示不限制",
+    "slider": {
+      "min": 0,
+      "max": 20000,
+      "step": 100
+    },
+    "default": 4000
+  },
   "experience_prompt": {
     "description": "经历生成提示词",
     "type": "text",
-    "hint": "要求模型生成一个虚拟角色刚刚发生的日常见闻或经历",
-    "default": "请为一个虚拟角色生成一段刚刚发生的日常见闻或经历，80字以内，具体、自然，不要解释。"
+    "hint": "要求模型以当前角色为主体，生成一个刚刚发生的日常见闻或经历",
+    "default": "请以当前角色为主体生成一段刚刚发生的日常见闻或经历，80字以内，具体、自然，不要解释。"
   },
   "decision_prompt": {
     "description": "主动消息决策提示词",
