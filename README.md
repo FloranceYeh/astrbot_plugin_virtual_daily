@@ -17,7 +17,9 @@
 - `target_groups` / `target_users`：主动消息候选目标。建议至少配置一个群号或用户号。
 - `allow_recent_sessions`：开启后会把插件运行期间记录到的群聊或私聊也作为候选目标。
 - `interval_minutes`：每次生成经历并决策的基础间隔。
-- `max_delay_seconds`：LLM 决定发送时允许的最大发送延迟。
+- `min_delay_seconds` / `max_delay_seconds`：LLM 决定发送时允许的发送延迟区间。
+- `experience_send_policy`：见闻发送策略，`always` 总是提供见闻，`never` 不提供见闻只询问用户近况，`probability` 按概率提供见闻。
+- `experience_send_probability`：`experience_send_policy` 为 `probability` 时的见闻发送概率，范围 0-100。
 - `experience_prompt`：控制虚拟经历的风格。
 - `decision_prompt`：控制 LLM 如何判断是否主动发言，默认要求只输出 JSON。
 

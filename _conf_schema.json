@@ -27,16 +27,44 @@
     },
     "default": 600
   },
-  "max_delay_seconds": {
-    "description": "LLM 可选择的最大发送延迟（秒）",
+  "min_delay_seconds": {
+    "description": "最小发送延迟（秒）",
     "type": "int",
-    "hint": "LLM 决定发送时，可以安排在这段时间内延迟发送",
+    "hint": "LLM 决定发送时，最终延迟不会低于这个值",
+    "slider": {
+      "min": 0,
+      "max": 86400,
+      "step": 1
+    },
+    "default": 0
+  },
+  "max_delay_seconds": {
+    "description": "最大发送延迟（秒）",
+    "type": "int",
+    "hint": "LLM 决定发送时，最终延迟会限制在最小/最大延迟区间内",
     "slider": {
       "min": 0,
       "max": 86400,
       "step": 1
     },
     "default": 1800
+  },
+  "experience_send_policy": {
+    "description": "见闻发送策略",
+    "type": "string",
+    "hint": "always=总是把见闻交给大模型；never=不发送见闻，只让大模型询问用户近况；probability=按概率发送见闻",
+    "default": "always"
+  },
+  "experience_send_probability": {
+    "description": "见闻发送概率（%）",
+    "type": "int",
+    "hint": "仅当见闻发送策略为 probability 时生效，0 表示永不发送见闻，100 表示总是发送见闻",
+    "slider": {
+      "min": 0,
+      "max": 100,
+      "step": 1
+    },
+    "default": 50
   },
   "target_groups": {
     "description": "主动消息目标群列表",

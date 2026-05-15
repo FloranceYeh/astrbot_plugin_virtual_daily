@@ -82,6 +82,8 @@ class VirtualDailyPlugin(Star):
         lines = [
             f"状态: {'启用' if self._cfg_bool('enabled', True) else '关闭'}",
             f"检查间隔: {self._cfg_int('interval_minutes', 60)} 分钟",
+            f"延迟区间: {self._delay_bounds()[0]}-{self._delay_bounds()[1]} 秒",
+            f"见闻策略: {self._experience_policy()}",
             f"已记录会话: {len(self._recent_messages)} 个",
             f"上次运行: {self._format_ts(self._last_run_at)}",
             f"上次经历: {self._last_experience or '无'}",
@@ -104,7 +106,7 @@ class VirtualDailyPlugin(Star):
         topic = event.message_str.partition(" ")[2].strip()
         session_key = self._event_session_key(event)
         target_type, target_id = self._target_from_event(event)
-        experience = await self._generate_experience(topic=topic)
+        experience = await self._maybe_generate_experience(topic=topic)
         decision = await self._decide(
             experience=experience,
             session_key=session_key,
@@ -117,13 +119,13 @@ class VirtualDailyPlugin(Star):
 
         if not decision.should_send:
             yield event.plain_result(
-                f"生成经历:\n{experience}\n\nLLM 决定不发送。\n理由: {decision.reason}"
+                f"生成经历:\n{experience or '本轮未提供见闻'}\n\nLLM 决定不发送。\n理由: {decision.reason}"
             )
             return
 
         await self._send_decision(decision, ignore_delay=True)
         yield event.plain_result(
-            f"生成经历:\n{experience}\n\n已按 LLM 决策发送。\n内容:\n{decision.content}"
+            f"生成经历:\n{experience or '本轮未提供见闻'}\n\n已按 LLM 决策发送。\n内容:\n{decision.content}"
         )
 
     async def _run_loop(self):
@@ -146,7 +148,7 @@ class VirtualDailyPlugin(Star):
             logger.warning("VirtualDaily skipped: no target group/user configured or observed")
             return
 
-        experience = await self._generate_experience()
+        experience = await self._maybe_generate_experience()
         decision = await self._decide(
             experience=experience,
             session_key=session_key,
@@ -185,6 +187,11 @@ class VirtualDailyPlugin(Star):
 
         return self._fallback_experience(topic)
 
+    async def _maybe_generate_experience(self, topic: str = "") -> str:
+        if not self._should_include_experience():
+            return ""
+        return await self._generate_experience(topic=topic)
+
     async def _decide(
         self,
         *,
@@ -214,8 +221,14 @@ class VirtualDailyPlugin(Star):
         user_prompt = json.dumps(
             {
                 "experience": experience,
+                "experience_policy": self._experience_policy(),
+                "instruction": (
+                    "如果 experience 为空，不要编造见闻，只自然地询问用户近况。"
+                    "如果 experience 不为空，可以按聊天氛围选择分享见闻或询问近况。"
+                ),
                 "recent_context": contexts[-self._cfg_int("context_max_messages", 80) :],
                 "fallback_target": target_hint,
+                "min_delay_seconds": self._delay_bounds()[0],
                 "max_delay_seconds": self._cfg_int("max_delay_seconds", 1800),
                 "content_max_chars": self._cfg_int("content_max_chars", 120),
             },
@@ -255,14 +268,14 @@ class VirtualDailyPlugin(Star):
     def _parse_decision(
         self, data: dict[str, Any], fallback_target_type: str, fallback_target_id: str
     ) -> ProactiveDecision:
-        max_delay = self._cfg_int("max_delay_seconds", 1800)
+        min_delay, max_delay = self._delay_bounds()
         max_chars = self._cfg_int("content_max_chars", 120)
         target_type = str(data.get("target_type") or fallback_target_type).lower()
         if target_type not in {"group", "user"}:
             target_type = fallback_target_type
         target_id = re.sub(r"\D", "", str(data.get("target_id") or fallback_target_id))
         content = self._clean_text(str(data.get("content") or ""))[:max_chars]
-        delay = self._clamp_int(data.get("delay_seconds", 0), 0, max_delay)
+        delay = self._clamp_int(data.get("delay_seconds", min_delay), min_delay, max_delay)
         should_send = self._as_bool(data.get("should_send")) and bool(target_id) and bool(content)
         return ProactiveDecision(
             should_send=should_send,
@@ -321,6 +334,30 @@ class VirtualDailyPlugin(Star):
         base = max(1, self._cfg_int("interval_minutes", 60)) * 60
         jitter = max(0, self._cfg_int("interval_jitter_seconds", 600))
         return max(1, base + random.randint(-jitter, jitter))
+
+    def _delay_bounds(self) -> tuple[int, int]:
+        min_delay = max(0, self._cfg_int("min_delay_seconds", 0))
+        max_delay = max(0, self._cfg_int("max_delay_seconds", 1800))
+        if min_delay > max_delay:
+            return max_delay, min_delay
+        return min_delay, max_delay
+
+    def _experience_policy(self) -> str:
+        policy = self._cfg_str("experience_send_policy", "always").strip().lower()
+        if policy in {"never", "none", "off", "ask_only"}:
+            return "never"
+        if policy in {"probability", "probabilistic", "random", "chance"}:
+            return "probability"
+        return "always"
+
+    def _should_include_experience(self) -> bool:
+        policy = self._experience_policy()
+        if policy == "never":
+            return False
+        if policy == "probability":
+            chance = self._clamp_int(self.config.get("experience_send_probability", 50), 0, 100)
+            return random.randint(1, 100) <= chance
+        return True
 
     def _fallback_experience(self, topic: str = "") -> str:
         places = ["便利店", "路口", "窗边", "电梯里", "楼下", "书桌前"]
