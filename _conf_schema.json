@@ -200,8 +200,14 @@
   "use_astrbot_persona": {
     "description": "使用 AstrBot 内置人格文档",
     "type": "bool",
-    "hint": "开启后优先按当前会话读取 AstrBot 内置人格；读取不到时再使用下方手动人格文档配置",
+    "hint": "兼容旧配置。persona_source 留空时，开启后优先按当前会话读取 AstrBot 内置人格；读取不到时再使用下方手动人格文档配置",
     "default": true
+  },
+  "persona_source": {
+    "description": "人格文档来源",
+    "type": "string",
+    "hint": "astrbot=生成见闻和主动消息都优先使用 AstrBot 当前会话人格，读取不到时使用备用人格；manual=只使用下方备用人格；none=不注入人格。留空则使用旧配置 use_astrbot_persona",
+    "default": "astrbot"
   },
   "persona_document": {
     "description": "备用角色人格文档内容",

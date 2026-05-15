@@ -23,7 +23,8 @@
 - `min_delay_seconds` / `max_delay_seconds`：LLM 决定发送时允许的发送延迟区间。
 - `experience_send_policy`：见闻发送策略，`always` 总是提供见闻，`never` 不提供见闻只询问用户近况，`probability` 按概率提供见闻。
 - `experience_send_probability`：`experience_send_policy` 为 `probability` 时的见闻发送概率，范围 0-100。
-- `use_astrbot_persona`：启用后优先使用 AstrBot 当前会话绑定的人格文档，读取不到时再使用备用人格配置。
+- `persona_source`：人格文档来源。`astrbot` 会让生成见闻和生成主动消息都优先使用 AstrBot 当前会话人格，读取不到时使用备用人格；`manual` 只使用备用人格；`none` 不注入人格。
+- `use_astrbot_persona`：旧配置兼容项。`persona_source` 留空时才按它决定是否优先使用 AstrBot 人格。
 - `persona_document` / `persona_document_path`：备用角色人格文档。配置路径时会优先读取文件，路径相对插件目录。
 - `split_messages_enabled`：启用后会把主动消息按长度和标点拆成多条发送。
 - `split_message_max_chars` / `split_message_interval_ms`：控制每条分割消息的最大字数和发送间隔。

@@ -104,6 +104,7 @@ class VirtualDailyPlugin(Star):
             f"检查间隔: {self._cfg_int('interval_minutes', 60)} 分钟",
             f"延迟区间: {self._delay_bounds()[0]}-{self._delay_bounds()[1]} 秒",
             f"见闻策略: {self._experience_policy()}",
+            f"人格来源: {self._persona_source()}",
             f"消息分割: {'启用' if self._cfg_bool('split_messages_enabled', False) else '关闭'}",
             f"已记录会话: {len(self._recent_messages)} 个",
             f"上次运行: {self._format_ts(self._last_run_at)}",
@@ -412,10 +413,17 @@ class VirtualDailyPlugin(Star):
 
     async def _load_persona_document(self, unified_msg_origin: str | None = None) -> str:
         text = ""
-        if self._cfg_bool("use_astrbot_persona", True):
+        source = self._persona_source()
+        if source == "none":
+            return ""
+
+        if source == "astrbot":
             text = await self._load_astrbot_persona(unified_msg_origin)
             if text:
                 return self._limit_persona_document(text)
+
+        if source not in {"astrbot", "manual"}:
+            return ""
 
         inline_persona = self._cfg_str("persona_document", "").strip()
         path = self._cfg_str("persona_document_path", "").strip()
@@ -598,6 +606,12 @@ class VirtualDailyPlugin(Star):
         if policy in {"probability", "probabilistic", "random", "chance"}:
             return "probability"
         return "always"
+
+    def _persona_source(self) -> str:
+        source = self._cfg_str("persona_source", "").strip().lower()
+        if source in {"astrbot", "manual", "none"}:
+            return source
+        return "astrbot" if self._cfg_bool("use_astrbot_persona", True) else "manual"
 
     def _should_include_experience(self) -> bool:
         policy = self._experience_policy()
