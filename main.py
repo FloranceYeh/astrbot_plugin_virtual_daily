@@ -415,7 +415,7 @@ class VirtualDailyPlugin(Star):
         if usage not in {"experience", "decision"}:
             logger.warning(
                 f"VirtualDaily unknown persona usage: {usage}. "
-                'Expected "experience" or "decision". Returning empty persona document.'
+                "Expected 'experience' or 'decision'. Returning empty persona document."
             )
             return ""
         inline_persona = self._cfg_str(f"{usage}_persona_document", "").strip()
@@ -425,7 +425,7 @@ class VirtualDailyPlugin(Star):
                 self._cfg_str("persona_document", "").strip(),
                 self._cfg_str("persona_document_path", "").strip(),
             )
-        text = ""
+        text = inline_persona
 
         if path:
             try:
@@ -437,8 +437,6 @@ class VirtualDailyPlugin(Star):
                     text = file_text
             except OSError as e:
                 logger.warning(f"VirtualDaily failed to read persona document: {e}")
-        else:
-            text = inline_persona
 
         return self._limit_persona_document(text)
 
