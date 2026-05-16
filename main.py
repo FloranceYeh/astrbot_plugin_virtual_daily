@@ -440,8 +440,8 @@ class VirtualDailyPlugin(Star):
             return ""
 
         specific_path = self._cfg_str(f"{usage}_persona_document_path", "").strip()
-        common_path = self._cfg_str("persona_document_path", "").strip()
-        file_path = specific_path or common_path
+        fallback_path = self._cfg_str("persona_document_path", "").strip()
+        file_path = specific_path or fallback_path
         if file_path:
             file_text = self._read_persona_document_from_path(file_path)
             if file_text:
@@ -489,16 +489,19 @@ class VirtualDailyPlugin(Star):
             if not curr_cid:
                 return
 
+            add_assistant_message = getattr(conversation_manager, "add_assistant_message", None)
+            add_message_pair = getattr(conversation_manager, "add_message_pair", None)
+            update_conversation = getattr(conversation_manager, "update_conversation", None)
+            get_conversation = getattr(conversation_manager, "get_conversation", None)
             placeholder = (
                 self._cfg_str("proactive_context_placeholder", "[VirtualDaily主动消息]").strip()
                 or "[VirtualDaily主动消息]"
             )
+            placeholder_user_record = {
+                "role": "user",
+                "content": [{"type": "text", "text": placeholder}],
+            }
             if self._astrbot_context_append_mode is None:
-                add_assistant_message = getattr(
-                    conversation_manager, "add_assistant_message", None
-                )
-                add_message_pair = getattr(conversation_manager, "add_message_pair", None)
-                update_conversation = getattr(conversation_manager, "update_conversation", None)
                 if add_assistant_message and AssistantMessageSegment and TextPart:
                     self._astrbot_context_append_mode = "assistant"
                 elif add_message_pair and AssistantMessageSegment and TextPart:
@@ -513,7 +516,6 @@ class VirtualDailyPlugin(Star):
                     )
 
             if self._astrbot_context_append_mode == "assistant":
-                add_assistant_message = getattr(conversation_manager, "add_assistant_message", None)
                 if not add_assistant_message or not AssistantMessageSegment or not TextPart:
                     self._astrbot_context_append_mode = "unsupported"
                     logger.warning(
@@ -530,7 +532,6 @@ class VirtualDailyPlugin(Star):
                     assistant_message=assistant_message,
                 )
             elif self._astrbot_context_append_mode == "pair":
-                add_message_pair = getattr(conversation_manager, "add_message_pair", None)
                 if not add_message_pair or not AssistantMessageSegment or not TextPart:
                     self._astrbot_context_append_mode = "unsupported"
                     logger.warning(
@@ -545,7 +546,7 @@ class VirtualDailyPlugin(Star):
                 user_message = (
                     UserMessageSegment(content=[TextPart(text=placeholder)])
                     if UserMessageSegment
-                    else {"role": "user", "content": [{"type": "text", "text": placeholder}]}
+                    else placeholder_user_record
                 )
                 result = add_message_pair(
                     cid=curr_cid,
@@ -553,7 +554,6 @@ class VirtualDailyPlugin(Star):
                     assistant_message=assistant_message,
                 )
             elif self._astrbot_context_append_mode == "history":
-                update_conversation = getattr(conversation_manager, "update_conversation", None)
                 if not update_conversation:
                     self._astrbot_context_append_mode = "unsupported"
                     logger.warning(
@@ -563,7 +563,6 @@ class VirtualDailyPlugin(Star):
                     return
 
                 history: list[dict[str, Any]] = []
-                get_conversation = getattr(conversation_manager, "get_conversation", None)
                 if get_conversation:
                     conversation = await get_conversation(unified_msg_origin, curr_cid)
                     if conversation and getattr(conversation, "history", None):
@@ -580,9 +579,7 @@ class VirtualDailyPlugin(Star):
                         elif isinstance(raw_history, list):
                             history = raw_history
 
-                history.append(
-                    {"role": "user", "content": [{"type": "text", "text": placeholder}]}
-                )
+                history.append(placeholder_user_record)
                 history.append(
                     {"role": "assistant", "content": [{"type": "text", "text": content}]}
                 )
