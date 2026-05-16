@@ -342,8 +342,13 @@ class VirtualDailyPlugin(Star):
             logger.error("VirtualDaily cannot send: platform client is not ready")
             return
 
+        parts = self._split_message(decision.content)
+        logger.debug(
+            f"VirtualDaily sending decision to {decision.target_type}:{decision.target_id} - parts={len(parts)}"
+        )
+
         if decision.target_type == "user":
-            for part in self._split_message(decision.content):
+            for part in parts:
                 await self.client.send_private_msg(
                     user_id=int(decision.target_id),
                     message=[{"type": "text", "data": {"text": part}}],
@@ -352,7 +357,7 @@ class VirtualDailyPlugin(Star):
             await self._record_proactive_sent(decision)
             return
 
-        for part in self._split_message(decision.content):
+        for part in parts:
             await self.client.send_group_msg(
                 group_id=int(decision.target_id),
                 message=[{"type": "text", "data": {"text": part}}],
@@ -368,7 +373,15 @@ class VirtualDailyPlugin(Star):
         session_key = f"{decision.target_type}:{decision.target_id}"
         if self._cfg_bool("add_sent_message_to_context", True):
             self._recent_messages[session_key].append(f"机器人: {content}")
-        await self._append_to_astrbot_context(session_key, content)
+            logger.debug(f"VirtualDaily appended to recent_messages: {session_key}")
+        else:
+            logger.debug("VirtualDaily add_sent_message_to_context disabled by config")
+
+        try:
+            await self._append_to_astrbot_context(session_key, content)
+            logger.debug(f"VirtualDaily attempted AstrBot context append: {session_key}")
+        except Exception as e:
+            logger.warning(f"VirtualDaily AstrBot context append raised: {e}")
         self._unanswered_counts[session_key] += 1
         logger.info(
             "VirtualDaily proactive message sent, unanswered count "
