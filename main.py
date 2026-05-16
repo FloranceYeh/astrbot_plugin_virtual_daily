@@ -448,7 +448,7 @@ class VirtualDailyPlugin(Star):
                 )
                 result = add_message_pair(
                     cid=curr_cid,
-                    user_message=None,
+                    user_message={},
                     assistant_message=assistant_message,
                 )
                 if hasattr(result, "__await__"):
