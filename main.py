@@ -56,6 +56,7 @@ class VirtualDailyPlugin(Star):
         self._last_run_at = 0.0
         self._trigger_times: list[float] = []
         self._unanswered_counts: dict[str, int] = defaultdict(int)
+        self._astrbot_context_append_mode: str | None = None
 
     async def initialize(self):
         if self._cfg_bool("enabled", True):
@@ -441,25 +442,42 @@ class VirtualDailyPlugin(Star):
             if not curr_cid:
                 return
 
-            add_message_pair = getattr(conversation_manager, "add_message_pair", None)
-            if add_message_pair and AssistantMessageSegment and TextPart:
-                assistant_message = AssistantMessageSegment(
-                    content=[TextPart(text=content)],
+            if self._astrbot_context_append_mode is None:
+                add_assistant_message = getattr(
+                    conversation_manager, "add_assistant_message", None
                 )
-                result = add_message_pair(
-                    cid=curr_cid,
-                    user_message={},
-                    assistant_message=assistant_message,
-                )
-                if hasattr(result, "__await__"):
-                    await result
-                logger.debug(
-                    f"VirtualDaily appended proactive message to AstrBot context: {session_key}"
+                if add_assistant_message and AssistantMessageSegment and TextPart:
+                    self._astrbot_context_append_mode = "assistant"
+                else:
+                    self._astrbot_context_append_mode = "unsupported"
+                    logger.warning(
+                        "VirtualDaily skipped AstrBot context sync: "
+                        "compatible assistant-only append API is unavailable"
+                    )
+
+            if self._astrbot_context_append_mode != "assistant":
+                return
+
+            add_assistant_message = getattr(conversation_manager, "add_assistant_message", None)
+            if not add_assistant_message or not AssistantMessageSegment or not TextPart:
+                self._astrbot_context_append_mode = "unsupported"
+                logger.warning(
+                    "VirtualDaily skipped AstrBot context sync: "
+                    "assistant append dependencies became unavailable"
                 )
                 return
-            logger.warning(
-                "VirtualDaily could not append proactive message to AstrBot context: "
-                "add_message_pair or message segment classes are unavailable"
+
+            assistant_message = AssistantMessageSegment(
+                content=[TextPart(text=content)],
+            )
+            result = add_assistant_message(
+                cid=curr_cid,
+                assistant_message=assistant_message,
+            )
+            if hasattr(result, "__await__"):
+                await result
+            logger.debug(
+                f"VirtualDaily appended proactive message to AstrBot context: {session_key}"
             )
         except Exception as e:
             logger.warning(f"VirtualDaily failed to append AstrBot context: {e}")
