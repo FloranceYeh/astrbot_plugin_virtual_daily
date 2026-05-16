@@ -107,6 +107,9 @@ class VirtualDailyPlugin(Star):
             f"见闻策略: {self._experience_policy()}",
             "人格来源: 用户配置文档",
             f"消息分割: {'启用' if self._cfg_bool('split_messages_enabled', False) else '关闭'}",
+            f"分割最大字数: {self._cfg_int('split_message_max_chars', 80)}",
+            f"分割正则: {self._cfg_str('split_message_regex', '') or '-'}",
+            f"分割词: {','.join(self._cfg_list('split_message_words', ['\n','。','！','？','，']))}",
             f"已记录会话: {len(self._recent_messages)} 个",
             f"上次运行: {self._format_ts(self._last_run_at)}",
             f"触发次数: {len(self._trigger_times)}",
@@ -114,6 +117,7 @@ class VirtualDailyPlugin(Star):
             f"未回应计数: {self._format_unanswered_counts()}",
             f"上次经历: {self._last_experience or '无'}",
         ]
+        lines.append(f"AstrBot 上下文同步模式: {self._astrbot_context_append_mode or '未检测'}")
         if decision:
             lines.extend(
                 [
@@ -462,31 +466,59 @@ class VirtualDailyPlugin(Star):
                 if add_assistant_message and AssistantMessageSegment and TextPart:
                     self._astrbot_context_append_mode = "assistant"
                 else:
-                    self._astrbot_context_append_mode = "unsupported"
-                    logger.warning(
-                        "VirtualDaily skipped AstrBot context sync: "
-                        "compatible assistant-only append API is unavailable"
-                    )
+                    # try to detect older add_message_pair API as a fallback
+                    add_message_pair = getattr(conversation_manager, "add_message_pair", None)
+                    if add_message_pair and AssistantMessageSegment and TextPart:
+                        self._astrbot_context_append_mode = "pair"
+                    else:
+                        self._astrbot_context_append_mode = "unsupported"
+                        logger.warning(
+                            "VirtualDaily skipped AstrBot context sync: "
+                            "compatible assistant-only append API is unavailable"
+                        )
 
             if self._astrbot_context_append_mode != "assistant":
                 return
 
-            add_assistant_message = getattr(conversation_manager, "add_assistant_message", None)
-            if not add_assistant_message or not AssistantMessageSegment or not TextPart:
-                self._astrbot_context_append_mode = "unsupported"
-                logger.warning(
-                    "VirtualDaily skipped AstrBot context sync: "
-                    "assistant append dependencies became unavailable"
-                )
-                return
+            if self._astrbot_context_append_mode == "assistant":
+                add_assistant_message = getattr(conversation_manager, "add_assistant_message", None)
+                if not add_assistant_message or not AssistantMessageSegment or not TextPart:
+                    self._astrbot_context_append_mode = "unsupported"
+                    logger.warning(
+                        "VirtualDaily skipped AstrBot context sync: "
+                        "assistant append dependencies became unavailable"
+                    )
+                    return
 
-            assistant_message = AssistantMessageSegment(
-                content=[TextPart(text=content)],
-            )
-            result = add_assistant_message(
-                cid=curr_cid,
-                assistant_message=assistant_message,
-            )
+                assistant_message = AssistantMessageSegment(
+                    content=[TextPart(text=content)],
+                )
+                result = add_assistant_message(
+                    cid=curr_cid,
+                    assistant_message=assistant_message,
+                )
+            elif self._astrbot_context_append_mode == "pair":
+                add_message_pair = getattr(conversation_manager, "add_message_pair", None)
+                if not add_message_pair or not AssistantMessageSegment or not TextPart:
+                    self._astrbot_context_append_mode = "unsupported"
+                    logger.warning(
+                        "VirtualDaily skipped AstrBot context sync: "
+                        "pair append dependencies became unavailable"
+                    )
+                    return
+
+                assistant_message = AssistantMessageSegment(
+                    content=[TextPart(text=content)],
+                )
+                # Provide a minimal user_message dict with required 'role' to satisfy validation
+                user_message = {"role": "user", "content": []}
+                result = add_message_pair(
+                    cid=curr_cid,
+                    user_message=user_message,
+                    assistant_message=assistant_message,
+                )
+            else:
+                return
             if hasattr(result, "__await__"):
                 await result
             logger.debug(

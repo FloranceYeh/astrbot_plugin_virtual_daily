@@ -236,6 +236,6 @@
     "description": "主动消息决策提示词",
     "type": "text",
     "hint": "必须要求模型只输出 JSON，字段见默认提示词",
-    "default": "你负责决定机器人是否应该主动发言。只输出 JSON，不要 Markdown。字段: should_send(bool), delay_seconds(int), target_type('group'或'user'), target_id(string), content(string), reason(string)。主动消息必须自然、简短、像顺手分享，不要提到你在模拟经历或读取上下文。"
+    "default": "这是以你为主体的见闻，你负责决定机器人是否应该主动发言。只输出 JSON，不要 Markdown。字段: should_send(bool), delay_seconds(int), target_type('group'或'user'), target_id(string), content(string), reason(string)。主动消息必须自然、简短、像顺手分享，不要提到你在模拟经历或读取上下文。"
   }
 }
