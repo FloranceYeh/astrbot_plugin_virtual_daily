@@ -1,6 +1,5 @@
 import asyncio
 import json
-import os
 import random
 import re
 import time
@@ -439,39 +438,10 @@ class VirtualDailyPlugin(Star):
             )
             return ""
 
-        specific_path = self._cfg_str(f"{usage}_persona_document_path", "").strip()
-        fallback_path = self._cfg_str("persona_document_path", "").strip()
-        file_path = specific_path or fallback_path
-        if file_path:
-            file_text = self._read_persona_document_from_path(file_path)
-            if file_text:
-                return self._limit_persona_document(file_text)
-
         inline_persona = self._cfg_str(f"{usage}_persona_document", "").strip()
         if not inline_persona:
             inline_persona = self._cfg_str("persona_document", "").strip()
         return self._limit_persona_document(inline_persona)
-
-    def _read_persona_document_from_path(self, path_value: str) -> str:
-        raw_path = path_value.strip()
-        if not raw_path:
-            return ""
-
-        path = (
-            raw_path
-            if os.path.isabs(raw_path)
-            else os.path.normpath(os.path.join(os.path.dirname(__file__), raw_path))
-        )
-        if not os.path.exists(path):
-            logger.warning(f"VirtualDaily persona document path does not exist: {path}")
-            return ""
-
-        try:
-            with open(path, "r", encoding="utf-8") as fp:
-                return fp.read().strip()
-        except Exception as e:
-            logger.warning(f"VirtualDaily failed to read persona document path {path}: {e}")
-            return ""
 
     async def _append_to_astrbot_context(self, session_key: str, content: str):
         if not self._cfg_bool("add_sent_message_to_astrbot_context", True):
