@@ -419,24 +419,9 @@ class VirtualDailyPlugin(Star):
             )
             return ""
         inline_persona = self._cfg_str(f"{usage}_persona_document", "").strip()
-        path = self._cfg_str(f"{usage}_persona_document_path", "").strip()
-        if not inline_persona and not path:
-            inline_persona, path = (
-                self._cfg_str("persona_document", "").strip(),
-                self._cfg_str("persona_document_path", "").strip(),
-            )
+        if not inline_persona:
+            inline_persona = self._cfg_str("persona_document", "").strip()
         text = inline_persona
-
-        if path:
-            try:
-                if not os.path.isabs(path):
-                    path = os.path.join(os.path.dirname(__file__), path)
-                with open(path, "r", encoding="utf-8") as f:
-                    file_text = f.read().strip()
-                if file_text:
-                    text = file_text
-            except OSError as e:
-                logger.warning(f"VirtualDaily failed to read persona document: {e}")
 
         return self._limit_persona_document(text)
 

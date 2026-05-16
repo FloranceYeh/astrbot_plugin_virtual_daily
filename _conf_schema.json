@@ -203,34 +203,16 @@
     "hint": "仅用于生成见闻；如果同时配置路径，路径文件内容优先",
     "default": ""
   },
-  "experience_persona_document_path": {
-    "description": "见闻生成人格文档路径",
-    "type": "string",
-    "hint": "仅用于生成见闻；相对路径以插件目录为基准，文件需使用 UTF-8 编码",
-    "default": ""
-  },
   "decision_persona_document": {
     "description": "主动消息人格文档内容",
     "type": "text",
     "hint": "仅用于主动消息决策和内容生成；如果同时配置路径，路径文件内容优先",
     "default": ""
   },
-  "decision_persona_document_path": {
-    "description": "主动消息人格文档路径",
-    "type": "string",
-    "hint": "仅用于主动消息决策和内容生成；相对路径以插件目录为基准，文件需使用 UTF-8 编码",
-    "default": ""
-  },
   "persona_document": {
-    "description": "通用人格文档内容 （兼容旧配置）",
+    "description": "通用人格文档内容",
     "type": "text",
     "hint": "当 experience_persona_document 和 decision_persona_document 未配置时作为回退使用；如果同时配置路径，路径文件内容优先",
-    "default": ""
-  },
-  "persona_document_path": {
-    "description": "通用人格文档路径 （兼容旧配置）",
-    "type": "string",
-    "hint": "当 experience_persona_document_path 和 decision_persona_document_path 未配置时作为回退使用；相对路径以插件目录为基准，文件需使用 UTF-8 编码",
     "default": ""
   },
   "persona_document_max_chars": {
