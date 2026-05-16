@@ -203,16 +203,34 @@
     "hint": "仅用于生成见闻；如果同时配置路径，路径文件内容优先",
     "default": ""
   },
+  "experience_persona_document_path": {
+    "description": "见闻生成人格文档路径",
+    "type": "string",
+    "hint": "仅用于生成见闻；支持绝对路径和相对插件目录路径；非空时优先于内容配置",
+    "default": ""
+  },
   "decision_persona_document": {
     "description": "主动消息人格文档内容",
     "type": "text",
     "hint": "仅用于主动消息决策和内容生成；如果同时配置路径，路径文件内容优先",
     "default": ""
   },
+  "decision_persona_document_path": {
+    "description": "主动消息人格文档路径",
+    "type": "string",
+    "hint": "仅用于主动消息决策和内容生成；支持绝对路径和相对插件目录路径；非空时优先于内容配置",
+    "default": ""
+  },
   "persona_document": {
     "description": "通用人格文档内容",
     "type": "text",
     "hint": "当 experience_persona_document 和 decision_persona_document 未配置时作为回退使用；如果同时配置路径，路径文件内容优先",
+    "default": ""
+  },
+  "persona_document_path": {
+    "description": "通用人格文档路径",
+    "type": "string",
+    "hint": "当专用路径未配置时作为回退；支持绝对路径和相对插件目录路径；非空时优先于内容配置",
     "default": ""
   },
   "persona_document_max_chars": {
@@ -225,6 +243,12 @@
       "step": 100
     },
     "default": 4000
+  },
+  "proactive_context_placeholder": {
+    "description": "主动消息写入上下文占位文本",
+    "type": "string",
+    "hint": "写回 AstrBot 对话历史时模拟 user 侧文本，建议保留简短固定内容以节省上下文",
+    "default": "[VirtualDaily主动消息]"
   },
   "experience_prompt": {
     "description": "经历生成提示词",

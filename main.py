@@ -23,10 +23,12 @@ try:
     from astrbot.core.agent.message import (
         AssistantMessageSegment,
         TextPart,
+        UserMessageSegment,
     )
 except ImportError:
     AssistantMessageSegment = None
     TextPart = None
+    UserMessageSegment = None
 
 
 @dataclass
@@ -436,12 +438,40 @@ class VirtualDailyPlugin(Star):
                 "Expected 'experience' or 'decision'. Returning empty persona document."
             )
             return ""
+
+        specific_path = self._cfg_str(f"{usage}_persona_document_path", "").strip()
+        common_path = self._cfg_str("persona_document_path", "").strip()
+        file_path = specific_path or common_path
+        if file_path:
+            file_text = self._read_persona_document_from_path(file_path)
+            if file_text:
+                return self._limit_persona_document(file_text)
+
         inline_persona = self._cfg_str(f"{usage}_persona_document", "").strip()
         if not inline_persona:
             inline_persona = self._cfg_str("persona_document", "").strip()
-        text = inline_persona
+        return self._limit_persona_document(inline_persona)
 
-        return self._limit_persona_document(text)
+    def _read_persona_document_from_path(self, path_value: str) -> str:
+        raw_path = path_value.strip()
+        if not raw_path:
+            return ""
+
+        path = (
+            raw_path
+            if os.path.isabs(raw_path)
+            else os.path.normpath(os.path.join(os.path.dirname(__file__), raw_path))
+        )
+        if not os.path.exists(path):
+            logger.warning(f"VirtualDaily persona document path does not exist: {path}")
+            return ""
+
+        try:
+            with open(path, "r", encoding="utf-8") as fp:
+                return fp.read().strip()
+        except Exception as e:
+            logger.warning(f"VirtualDaily failed to read persona document path {path}: {e}")
+            return ""
 
     async def _append_to_astrbot_context(self, session_key: str, content: str):
         if not self._cfg_bool("add_sent_message_to_astrbot_context", True):
@@ -459,26 +489,28 @@ class VirtualDailyPlugin(Star):
             if not curr_cid:
                 return
 
+            placeholder = (
+                self._cfg_str("proactive_context_placeholder", "[VirtualDaily主动消息]").strip()
+                or "[VirtualDaily主动消息]"
+            )
             if self._astrbot_context_append_mode is None:
                 add_assistant_message = getattr(
                     conversation_manager, "add_assistant_message", None
                 )
+                add_message_pair = getattr(conversation_manager, "add_message_pair", None)
+                update_conversation = getattr(conversation_manager, "update_conversation", None)
                 if add_assistant_message and AssistantMessageSegment and TextPart:
                     self._astrbot_context_append_mode = "assistant"
+                elif add_message_pair and AssistantMessageSegment and TextPart:
+                    self._astrbot_context_append_mode = "pair"
+                elif update_conversation:
+                    self._astrbot_context_append_mode = "history"
                 else:
-                    # try to detect older add_message_pair API as a fallback
-                    add_message_pair = getattr(conversation_manager, "add_message_pair", None)
-                    if add_message_pair and AssistantMessageSegment and TextPart:
-                        self._astrbot_context_append_mode = "pair"
-                    else:
-                        self._astrbot_context_append_mode = "unsupported"
-                        logger.warning(
-                            "VirtualDaily skipped AstrBot context sync: "
-                            "compatible assistant-only append API is unavailable"
-                        )
-
-            if self._astrbot_context_append_mode != "assistant":
-                return
+                    self._astrbot_context_append_mode = "unsupported"
+                    logger.warning(
+                        "VirtualDaily skipped AstrBot context sync: "
+                        "compatible append API is unavailable"
+                    )
 
             if self._astrbot_context_append_mode == "assistant":
                 add_assistant_message = getattr(conversation_manager, "add_assistant_message", None)
@@ -510,12 +542,54 @@ class VirtualDailyPlugin(Star):
                 assistant_message = AssistantMessageSegment(
                     content=[TextPart(text=content)],
                 )
-                # Provide a minimal user_message dict with required 'role' to satisfy validation
-                user_message = {"role": "user", "content": []}
+                user_message = (
+                    UserMessageSegment(content=[TextPart(text=placeholder)])
+                    if UserMessageSegment
+                    else {"role": "user", "content": [{"type": "text", "text": placeholder}]}
+                )
                 result = add_message_pair(
                     cid=curr_cid,
                     user_message=user_message,
                     assistant_message=assistant_message,
+                )
+            elif self._astrbot_context_append_mode == "history":
+                update_conversation = getattr(conversation_manager, "update_conversation", None)
+                if not update_conversation:
+                    self._astrbot_context_append_mode = "unsupported"
+                    logger.warning(
+                        "VirtualDaily skipped AstrBot context sync: "
+                        "history append dependencies became unavailable"
+                    )
+                    return
+
+                history: list[dict[str, Any]] = []
+                get_conversation = getattr(conversation_manager, "get_conversation", None)
+                if get_conversation:
+                    conversation = await get_conversation(unified_msg_origin, curr_cid)
+                    if conversation and getattr(conversation, "history", None):
+                        raw_history = conversation.history
+                        if isinstance(raw_history, str):
+                            try:
+                                parsed_history = json.loads(raw_history)
+                                if isinstance(parsed_history, list):
+                                    history = parsed_history
+                            except json.JSONDecodeError:
+                                logger.warning(
+                                    "VirtualDaily skipped invalid conversation.history json"
+                                )
+                        elif isinstance(raw_history, list):
+                            history = raw_history
+
+                history.append(
+                    {"role": "user", "content": [{"type": "text", "text": placeholder}]}
+                )
+                history.append(
+                    {"role": "assistant", "content": [{"type": "text", "text": content}]}
+                )
+                result = update_conversation(
+                    unified_msg_origin=unified_msg_origin,
+                    conversation_id=curr_cid,
+                    history=history,
                 )
             else:
                 return
